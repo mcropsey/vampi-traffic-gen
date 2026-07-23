@@ -96,11 +96,16 @@ def load_config(path):
 
 # Built-in VAMPI endpoint map — the ground truth for the LIVE pass.
 # {method} and {path} are formatted with runtime values.
+#
+# NOTE: /createdb, register and login are deliberately NOT in this list. They
+# are handled explicitly at the top of live() in the correct order. /createdb
+# resets the demo database, so exercising it here (after we register our
+# throwaway user) would delete that user out from under the rest of the pass
+# and make every {username} call 404/500. register/login are likewise already
+# performed before the loop, so re-issuing them here just sent empty-body noise.
 VAMPI_ENDPOINTS = [
     ("GET",    "/",                              "home / vulnerable-mode banner",      False),
-    ("GET",    "/createdb",                      "recreate the demo database",         False),
-    ("POST",   "/users/v1/register",             "register a new user",                False),
-    ("POST",   "/users/v1/login",                "log in, returns auth token",         False),
+    ("GET",    "/me",                            "current logged-in user (needs token)", True),
     ("GET",    "/users/v1",                      "list all users (usernames)",         False),
     ("GET",    "/users/v1/_debug",               "list all users WITH passwords",      False),
     ("GET",    "/users/v1/{username}",           "get a single user by username",      False),
@@ -122,6 +127,10 @@ def rand(n=8):
 def shape(resp):
     """Compact description of a response body."""
     ct = resp.headers.get("content-type", "")
+    # 204 No Content (and other genuinely empty bodies) carry no payload to
+    # parse — report them as "empty" instead of "json(unparseable)".
+    if resp.status_code == 204 or not (resp.content or b"").strip():
+        return "empty"
     if "json" in ct:
         try:
             data = resp.json()
@@ -214,11 +223,20 @@ def probe_paths(session, base, results, paths):
 # Pass 3 — live calls (register, login, exercise every endpoint)
 # ---------------------------------------------------------------------------
 
-def live(session, base, results, token=None, username=None, password=None):
+def live(session, base, results, token=None, username=None, password=None,
+         reset_db=False):
     print("\n=== [3] Live endpoint exercise ===")
     username = username or f"disco_{rand()}"
     password = password or "Passw0rd!" + rand(4)
     email = f"{username}@example.com"
+
+    # Reset the demo DB FIRST, before we register — otherwise it would wipe the
+    # user we're about to create. Destructive, so it's opt-in via --reset-db.
+    if reset_db:
+        db = req(session, "GET", urljoin(base, "/createdb"))
+        if db is not None:
+            line("GET", "/createdb", db, note="recreate the demo database")
+            results["createdb"] = {"status": db.status_code, "shape": shape(db)}
 
     if not token:
         # Register
@@ -248,7 +266,6 @@ def live(session, base, results, token=None, username=None, password=None):
     called = []
 
     for method, path_tmpl, desc, needs_auth in VAMPI_ENDPOINTS:
-        # Skip destructive createdb unless explicitly allowed.
         path = path_tmpl.format(**sample)
         body = None
         if path_tmpl == "/users/v1/{username}/email":
@@ -284,6 +301,9 @@ def main():
     ap.add_argument("--username", help="username for the live pass")
     ap.add_argument("--password", help="password for the live pass")
     ap.add_argument("--no-live", action="store_true", help="skip the live/write pass")
+    ap.add_argument("--reset-db", action="store_true",
+                    help="hit /createdb to reseed the demo DB before the live pass "
+                         "(destructive; runs before registration)")
     ap.add_argument("--json", metavar="FILE", help="write full results to a JSON file")
     args = ap.parse_args()
 
@@ -309,7 +329,8 @@ def main():
     probe_paths(session, base, results, cfg["probe_paths"])
     if not args.no_live:
         live(session, base, results,
-             token=args.token, username=args.username, password=args.password)
+             token=args.token, username=args.username, password=args.password,
+             reset_db=args.reset_db)
     else:
         print("\n=== [3] Live endpoint exercise === (skipped: --no-live)")
 
