@@ -1,0 +1,2 @@
+# vampi_discovery.py dependencies
+requests>=2.31.0

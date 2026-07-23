@@ -1,0 +1,19 @@
+{
+  "base_url": "https://k8s.cropseyit.com",
+  "timeout": 8,
+  "spec_paths": [
+    "/openapi.json", "/openapi.yaml", "/openapi.yml",
+    "/swagger.json", "/swagger.yaml", "/swagger/v1/swagger.json",
+    "/api-docs", "/api-docs.json", "/v2/api-docs", "/v3/api-docs",
+    "/docs", "/ui/", "/swagger-ui/", "/redoc",
+    "/spec", "/api/spec"
+  ],
+  "probe_paths": [
+    "/", "/createdb", "/me", "/health", "/status", "/version",
+    "/users", "/users/v1", "/users/v1/_debug", "/users/v1/login",
+    "/users/v1/register", "/users/v1/admin",
+    "/books", "/books/v1", "/book", "/api", "/api/v1", "/api/v2",
+    "/admin", "/debug", "/login", "/register", "/auth", "/token",
+    "/products", "/orders", "/config", "/.env", "/robots.txt"
+  ]
+}
