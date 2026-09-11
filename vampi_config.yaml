@@ -1,0 +1,123 @@
+# ============================================================================
+# vampi_config.yaml  —  configuration for the VAmPI traffic generators
+# ----------------------------------------------------------------------------
+# Edit the values below, then run:   python3 vampi_traffic.py
+# (or point at a different file:     python3 vampi_traffic.py --config foo.yaml)
+#
+# Every comment below describes EXACTLY what changes when you edit that value.
+#
+# NOTE: VAmPI (https://github.com/erev0s/VAMPI) is a deliberately vulnerable
+# "vulnerable-on-purpose" API built for training. Point base_url at YOUR OWN
+# lab instance only — never at systems you don't own.
+#
+# NOTE: VAmPI issues SHORT-LIVED JWTs (this instance: 60 s). The helpers
+# re-acquire tokens on demand, so every script re-logins before its
+# authenticated calls; you don't need to manage token refresh yourself.
+# ============================================================================
+
+
+# ── target ──────────────────────────────────────────────────────────────────
+target:
+  # The VAmPI instance every request is sent to. Used by ALL scripts
+  # (traffic generator, cycle scripts, baseline/ and vuln/ scripts).
+  #   Change this  -> all traffic is redirected to the new host.
+  #   Must include scheme (http:// or https://). No trailing slash needed
+  #                    (it is stripped automatically if you include one).
+  #   Examples: https://vampi.cropseyit.com   |   http://localhost:5000
+  #
+  # Alternate host (currently unreachable / NXDOMAIN):
+  #   https://mcropsey-vampi-2wshbnvtsg983.azure-api.net
+  base_url: "https://vampi.cropseyit.com"
+
+
+# ── known_users ─────────────────────────────────────────────────────────────
+# VAmPI seeds a fixed roster: users name1..name9 with passwords pass1..pass9
+# plus an admin account. On the cropseyit lab the seeded roster is name1/pass1,
+# name2/pass2 and admin/pass1 (the admin password is pass1, not admin123).
+#
+# The exact passwords are also readable from GET /users/v1/_debug on a
+# vulnerable instance (that endpoint is the "excessive data exposure" finding).
+# These accounts are the authenticated identities for the findings phase and
+# are also sprayed with a wrong password by the "excessive credential
+# attempts" patterns.
+known_users:
+  # One account per entry. Each needs username + password (+ email for realism).
+  #   Higher (more accounts) -> more distinct authenticated identities.
+  #   Lower  -> fewer authenticated identities.
+  #   Wrong password -> that login fails; the generator keeps the ones that
+  #                    succeed (you still get the others).
+  users:
+    - username: name1
+      password: pass1
+      email: mail1@mail.com
+    - username: name2
+      password: pass2
+      email: mail2@mail.com
+    - username: admin
+      password: pass1
+      email: admin@mail.com
+
+
+# ── run ─────────────────────────────────────────────────────────────────────
+run:
+  # Master switches for the two phases of vampi_traffic.py. At least one must be true.
+  #
+  # warmup:   true  -> generates many distinct-consumer journeys (register ->
+  #                    login -> read/update) to push the API through the
+  #                    learning period (see the warmup block).
+  #           false -> skip it (use once learning is already complete).
+  #
+  # findings: true  -> runs all three detection populations in order:
+  #                    authenticated, unauthenticated, bad-token.
+  #           false -> skip the detection patterns (e.g. warmup-only runs).
+  warmup: true
+  findings: true
+
+
+# ── warmup ──────────────────────────────────────────────────────────────────
+# Only used when run.warmup is true.
+warmup:
+  # Number of distinct-consumer journeys (each = a fresh signup + login + a
+  # normal read/update flow under a unique identity).
+  #   Higher -> more observed consumers, advances the learning period faster,
+  #             longer runtime, more load on the lab (many new users created).
+  #   Lower  -> quicker run, fewer consumers counted.
+  #   Aim at your sensor's consumer threshold.
+  consumers: 2500
+
+  # Concurrency for the warmup phase (parallel journeys).
+  #   Higher -> finishes faster, heavier burst load on VAmPI.
+  #   Lower  -> gentler on the lab, slower to reach the consumer count.
+  threads: 16
+
+
+# ── findings ────────────────────────────────────────────────────────────────
+# Only used when run.findings is true.
+findings:
+  # How many times the known-user list is looped for AUTHENTICATED traffic.
+  #   Higher -> more authenticated requests/volume from the same accounts
+  #             (useful if auth-context detections need sustained traffic).
+  #   Lower  -> a single quick pass per user.
+  auth_rounds: 5
+
+  # Multiplier for the credential-attempt volume (single-user brute force and
+  # across-users spraying). Base is ~40 attempts each; intensity 2 = ~80, etc.
+  #   Higher -> more likely to cross "excessive credential attempts"
+  #             thresholds, more login noise.
+  #   Lower  -> fewer attempts (may fall under the detection threshold).
+  intensity: 1
+
+  # Sacrificial account for the single-user brute-force pattern. This account
+  # gets sprayed with ~40 wrong passwords each run and may be throttled, so it
+  # MUST NOT be one of known_users.usernames — otherwise that real user fails
+  # to obtain a token on the next run (the N-1 problem).
+  #   Keep it a plausible-but-unseeded username.
+  brute_target: "locked-target"
+
+
+# ── http ────────────────────────────────────────────────────────────────────
+http:
+  # Per-request timeout in seconds.
+  #   Higher -> waits longer on a slow/unresponsive lab before giving up.
+  #   Lower  -> fails fast (good on a healthy local lab).
+  timeout: 10.0

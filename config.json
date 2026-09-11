@@ -1,5 +1,6 @@
 {
-  "base_url": "https://k8s.cropseyit.com",
+  #"base_url": "https://vampi.cropseyit.com/",
+  "base_url": "https://mcropsey-vampi-2wshbnvtsg983.azure-api.net/",
   "timeout": 8,
   "spec_paths": [
     "/openapi.json", "/openapi.yaml", "/openapi.yml",

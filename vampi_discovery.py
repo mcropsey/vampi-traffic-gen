@@ -45,7 +45,7 @@ except ImportError:
 DEFAULT_CONFIG = "config.json"
 
 # Fallbacks used only if a key is missing from the config file.
-DEFAULT_BASE = "https://k8s.cropseyit.com"
+DEFAULT_BASE = "https://vampi.cropseyit.com"
 TIMEOUT = 8
 
 # Candidate locations for the OpenAPI / Swagger document.
