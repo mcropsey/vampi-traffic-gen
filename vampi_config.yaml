@@ -28,6 +28,10 @@ target:
   # Alternate host (currently unreachable / NXDOMAIN):
   #   https://mcropsey-vampi-2wshbnvtsg983.azure-api.net
   base_url: "https://vampi.cropseyit.com"
+  # Azure APIM gateway key. Required because the API sits behind APIM,
+  # which 401s any request without it. Leave "" for direct (non-APIM) hosts.
+  # Can also be supplied via the APIM_SUBSCRIPTION_KEY env var (env wins).
+  subscription_key: ""
 
 
 # ── known_users ─────────────────────────────────────────────────────────────

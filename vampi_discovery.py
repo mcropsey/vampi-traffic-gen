@@ -45,7 +45,7 @@ except ImportError:
 DEFAULT_CONFIG = "config.json"
 
 # Fallbacks used only if a key is missing from the config file.
-DEFAULT_BASE = "https://vampi.cropseyit.com"
+DEFAULT_BASE = "https://xuitgw7bpb.execute-api.us-east-2.amazonaws.com/mcropsey-lab"
 TIMEOUT = 8
 
 # Candidate locations for the OpenAPI / Swagger document.
@@ -79,6 +79,7 @@ def load_config(path):
         "timeout": TIMEOUT,
         "spec_paths": SPEC_PATHS,
         "probe_paths": PROBE_PATHS,
+        "subscription_key": "",
     }
     if path and os.path.isfile(path):
         try:
@@ -317,6 +318,11 @@ def main():
 
     session = requests.Session()
     session.headers["User-Agent"] = "vampi-discovery/1.0"
+    # Azure APIM gateway key: env var wins, else subscription_key from config.
+    # Without it an APIM-fronted target 401s every request at the gateway.
+    apim_key = os.environ.get("APIM_SUBSCRIPTION_KEY", "").strip() or str(cfg.get("subscription_key", "") or "").strip()
+    if apim_key:
+        session.headers["Ocp-Apim-Subscription-Key"] = apim_key
     results = {"base": base}
 
     # Quick reachability check.

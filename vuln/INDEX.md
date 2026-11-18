@@ -23,6 +23,8 @@ etc.) so an API-security sensor can be validated against it.
 | `vampi_challenge_08_unauthenticated_access.py` | Broken access control (no auth) | `/me`, `/users/v1/{u}`, `/books/v1/{t}`, `PUT .../password`, `DELETE ...` |
 | `vampi_challenge_09_jwt_manipulation.py` | JWT alg=none / expired / long-life / garbage | `GET /me`, `GET /users/v1/{u}` |
 | `vampi_challenge_10_privilege_escalation_delete.py` | Mass assignment + broken access control (delete) | `DELETE /users/v1/{username}` |
+| `vampi_challenge_11_bola_users_unsuccessful.py` | BOLA (users) — attempt only, all guesses rejected | `GET /users/v1/{username}` |
+| `vampi_challenge_12_bola_books_unsuccessful.py` | BOLA (books) — attempt only, all guesses rejected | `GET /books/v1/{book_title}` |
 
 ## Run
 
@@ -32,6 +34,8 @@ python3 vuln/vampi_challenge_01_excessive_data_exposure.py
 python3 vuln/vampi_challenge_02_bola_users.py
 # ...
 python3 vuln/vampi_challenge_10_privilege_escalation_delete.py
+python3 vuln/vampi_challenge_11_bola_users_unsuccessful.py
+python3 vuln/vampi_challenge_12_bola_books_unsuccessful.py
 ```
 
 Each reads `vampi_config.yaml` (falling back to the repo-root one) and prints
@@ -50,3 +54,7 @@ the HTTP status + whether the pattern appears to have succeeded. Exit code is
 - On this instance the protected endpoints (`/me`, book reads, cross-user
   password/email changes, `DELETE` as non-admin) correctly return `401` — the
   scripts report that honestly rather than forcing a "finding".
+- `vampi_challenge_11` / `_12` are the **unsuccessful** BOLA variants of
+  `_02` / `_03`: same attempt traffic, but the guessed usernames/book titles
+  don't exist, so every request is rejected (404) and no foreign record or
+  secret is ever returned.

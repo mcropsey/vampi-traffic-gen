@@ -1,8 +1,8 @@
 #!/bin/bash
 # Run all VAMPI cycle scripts once per hour at the bottom of the hour.
-# Logs to /var/log/vampi_cycle.log
+# Logs to /home/mcropsey/vampi-traffic-gen/logs/vampi_cycle.log
 
-LOG_FILE="/var/log/vampi_cycle.log"
+LOG_FILE="/home/mcropsey/vampi-traffic-gen/logs/vampi_cycle.log"
 CYCLE_DIR="/home/mcropsey/vampi-traffic-gen"
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 

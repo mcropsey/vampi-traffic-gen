@@ -41,6 +41,50 @@ import yaml
 DEFAULT_CONFIG = "vampi_config.yaml"
 
 
+# ── APIM subscription key ─────────────────────────────────────────────────────
+# When base_url points at an Azure API Management gateway, APIM requires an
+# Ocp-Apim-Subscription-Key header on EVERY request (it rejects unkeyed calls
+# with 401 at the gateway, before they reach VAmPI). The key is read from the
+# APIM_SUBSCRIPTION_KEY env var if set, otherwise from `target.subscription_key`
+# in the config file. When a key is present we transparently inject it into every
+# outbound request by wrapping requests.Session.request, so no call site needs to
+# change. Empty key -> no-op (direct, non-APIM hosts behave exactly as before).
+APIM_KEY_HEADER = "Ocp-Apim-Subscription-Key"
+
+
+def _apim_key() -> str:
+    key = os.environ.get("APIM_SUBSCRIPTION_KEY", "").strip()
+    if key:
+        return key
+    try:
+        if os.path.exists(DEFAULT_CONFIG):
+            with open(DEFAULT_CONFIG) as f:
+                cfg = yaml.safe_load(f) or {}
+            return str((cfg.get("target") or {}).get("subscription_key", "") or "").strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _install_apim_header():
+    key = _apim_key()
+    if not key or getattr(requests.Session, "_apim_wrapped", False):
+        return
+    _orig_request = requests.Session.request
+
+    def request(self, method, url, **kwargs):
+        headers = dict(kwargs.get("headers") or {})
+        headers.setdefault(APIM_KEY_HEADER, key)
+        kwargs["headers"] = headers
+        return _orig_request(self, method, url, **kwargs)
+
+    requests.Session.request = request
+    requests.Session._apim_wrapped = True
+
+
+_install_apim_header()
+
+
 # ── config loading ───────────────────────────────────────────────────────────
 def load_config(path: str = DEFAULT_CONFIG) -> dict:
     if not os.path.exists(path):

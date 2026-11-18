@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 VAmPI Runtime Alert Trigger Script
-Target: https://3.137.4.41/
+Target: https://xuitgw7bpb.execute-api.us-east-2.amazonaws.com/mcropsey-lab/
 Purpose: Generate traffic that should surface in Noname Security runtime detection
 """
 
@@ -14,7 +14,7 @@ from urllib3.exceptions import InsecureRequestWarning
 
 requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 
-BASE_URL = "https://3.137.4.41"
+BASE_URL = "https://xuitgw7bpb.execute-api.us-east-2.amazonaws.com/mcropsey-lab"
 TIMEOUT = 10
 
 session = requests.Session()
